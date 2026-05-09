@@ -72,7 +72,7 @@ func toolDefinitions() -> [[String: Any]] {
                     ],
                     "voice": [
                         "type": "string",
-                        "description": "Голос macOS (say -v), например Milena (ru), Samantha (en). По умолчанию системный."
+                        "description": "Голос macOS (say -v). По умолчанию Milena (Enhanced). Примеры: Samantha (en), Daniel (en-GB)."
                     ]
                 ] as [String: Any],
                 "required": ["text"]
@@ -277,7 +277,7 @@ private func handleTranscript(maxChars: Int, client: FroggyClient) throws -> Str
 
 private func handleSpeak(text: String, voice: String?, client: FroggyClient) throws -> String {
     var req = FroggyRequest(cmd: "speak", prompt: text)
-    req.path = voice
+    req.path = voice ?? "Milena (Enhanced)"
     let responses = try client.send(req, timeoutSeconds: 120)
     if let err = responses.first(where: { $0.ok == false })?.error {
         throw MCPToolError(err)
