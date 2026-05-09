@@ -10,6 +10,7 @@ struct FroggyRequest: Codable {
     var maxChars: Int?
     var useContext: Bool?
     var path: String?
+    var accessor: String?
 }
 
 struct FroggyResponse: Codable {

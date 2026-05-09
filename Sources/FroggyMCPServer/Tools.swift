@@ -59,6 +59,24 @@ func toolDefinitions() -> [[String: Any]] {
                     ]
                 ] as [String: Any]
             ]
+        ],
+        [
+            "name": "froggy_inject",
+            "description": "Инжектирует текст в markdown-файл текущего созвона. Используй чтобы добавить Jira-тикеты, заметки или любой контекст в сессию до или во время созвона — локальный LLM увидит это в транскрипте.",
+            "inputSchema": [
+                "type": "object",
+                "properties": [
+                    "text": [
+                        "type": "string",
+                        "description": "Текст для инжекта в сессию созвона"
+                    ],
+                    "title": [
+                        "type": "string",
+                        "description": "Заголовок секции (default: Injected Context)"
+                    ]
+                ] as [String: Any],
+                "required": ["text"]
+            ]
         ]
     ]
 }
@@ -85,6 +103,12 @@ func callTool(name: String, arguments: [String: Any], client: FroggyClient) -> [
         case "froggy_transcript":
             let maxChars = arguments["max_chars"] as? Int ?? 8000
             text = try handleTranscript(maxChars: maxChars, client: client)
+        case "froggy_inject":
+            guard let injectText = arguments["text"] as? String else {
+                return errorContent("missing required argument: text")
+            }
+            let title = arguments["title"] as? String
+            text = try handleInject(text: injectText, title: title, client: client)
         default:
             return errorContent("unknown tool: \(name)")
         }
@@ -139,6 +163,16 @@ private func handleTranscript(maxChars: Int, client: FroggyClient) throws -> Str
         ? String(content.prefix(maxChars)) + "\n\n… (обрезано, полный файл: \(sessionPath))"
         : content
     return trimmed
+}
+
+private func handleInject(text: String, title: String?, client: FroggyClient) throws -> String {
+    var req = FroggyRequest(cmd: "injectContext", prompt: text)
+    req.accessor = title
+    let responses = try client.send(req)
+    if let err = responses.first(where: { $0.ok == false })?.error {
+        throw MCPToolError(err)
+    }
+    return "контекст добавлен в сессию\(title.map { ": \($0)" } ?? "")"
 }
 
 private func errorContent(_ message: String) -> [[String: Any]] {
