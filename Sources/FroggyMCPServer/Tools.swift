@@ -394,13 +394,17 @@ private func handleChat(question: String?, maxTranscriptChars: Int, maxTokens: I
     }
 
     // 2. Build a slim prompt
+    let persona = """
+        Ты — Froggy, голосовой ассистент. Говоришь живо и по-человечески, без канцелярита. \
+        Отвечаешь на том же языке что и вопрос. Максимум 2 предложения — чётко и тепло.
+        """
     let prompt: String
     if let q = question, !q.isEmpty {
         prompt = transcriptSlice.isEmpty
-            ? "\(q)\n\nОтветь коротко, 1-2 предложения."
-            : "Контекст:\n\(transcriptSlice)\n\nВопрос: \(q)\n\nОтветь коротко, 1-2 предложения."
+            ? "\(persona)\n\nВопрос: \(q)"
+            : "\(persona)\n\nКонтекст разговора:\n\(transcriptSlice)\n\nВопрос: \(q)"
     } else if !transcriptSlice.isEmpty {
-        prompt = "Последние реплики разговора:\n\(transcriptSlice)\n\nОтветь на последнее сообщение. Коротко, 1-2 предложения."
+        prompt = "\(persona)\n\nПоследние реплики:\n\(transcriptSlice)\n\nОтветь на последнее сообщение."
     } else {
         return "нет транскрипта и вопроса"
     }
