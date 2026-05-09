@@ -61,6 +61,44 @@ func toolDefinitions() -> [[String: Any]] {
             ]
         ],
         [
+            "name": "froggy_listen",
+            "description": "Запускает запись созвона (транскрипция микрофона). Опционально инжектирует pre-call контекст (Jira-тикеты, заметки) прямо при старте. Возвращает путь к файлу сессии.",
+            "inputSchema": [
+                "type": "object",
+                "properties": [
+                    "inject_text": [
+                        "type": "string",
+                        "description": "Pre-call контекст для инжекта в сессию (например содержимое Jira-тикетов)"
+                    ],
+                    "inject_title": [
+                        "type": "string",
+                        "description": "Заголовок для inject_text (default: Pre-call Context)"
+                    ]
+                ] as [String: Any]
+            ]
+        ],
+        [
+            "name": "froggy_listen_stop",
+            "description": "Останавливает запись созвона. Возвращает путь к файлу сессии — используй froggy_recap чтобы сгенерировать резюме.",
+            "inputSchema": [
+                "type": "object",
+                "properties": [:] as [String: Any]
+            ]
+        ],
+        [
+            "name": "froggy_recap",
+            "description": "Генерирует LLM-резюме последнего созвона через локальную модель. Дописывает summary в markdown-файл сессии. Занимает до 60 секунд.",
+            "inputSchema": [
+                "type": "object",
+                "properties": [
+                    "path": [
+                        "type": "string",
+                        "description": "Путь к файлу сессии (default: последняя сессия)"
+                    ]
+                ] as [String: Any]
+            ]
+        ],
+        [
             "name": "froggy_inject",
             "description": "Инжектирует текст в markdown-файл текущего созвона. Используй чтобы добавить Jira-тикеты, заметки или любой контекст в сессию до или во время созвона — локальный LLM увидит это в транскрипте.",
             "inputSchema": [
@@ -100,6 +138,15 @@ func callTool(name: String, arguments: [String: Any], client: FroggyClient) -> [
             let useContext = arguments["use_context"] as? Bool ?? false
             text = try handleGenerate(prompt: prompt, maxTokens: maxTokens,
                                       useContext: useContext, client: client)
+        case "froggy_listen":
+            let injectText  = arguments["inject_text"]  as? String
+            let injectTitle = arguments["inject_title"] as? String
+            text = try handleListen(injectText: injectText, injectTitle: injectTitle, client: client)
+        case "froggy_listen_stop":
+            text = try handleListenStop(client: client)
+        case "froggy_recap":
+            let path = arguments["path"] as? String
+            text = try handleRecap(path: path, client: client)
         case "froggy_transcript":
             let maxChars = arguments["max_chars"] as? Int ?? 8000
             text = try handleTranscript(maxChars: maxChars, client: client)
@@ -163,6 +210,48 @@ private func handleTranscript(maxChars: Int, client: FroggyClient) throws -> Str
         ? String(content.prefix(maxChars)) + "\n\n… (обрезано, полный файл: \(sessionPath))"
         : content
     return trimmed
+}
+
+private func handleListen(injectText: String?, injectTitle: String?, client: FroggyClient) throws -> String {
+    var req = FroggyRequest(cmd: "listen")
+    // pre-call inject: write to temp file, daemon reads it via request.path
+    if let text = injectText, !text.isEmpty {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("froggy-inject-\(Int(Date().timeIntervalSince1970)).md")
+        try text.write(to: tmp, atomically: true, encoding: .utf8)
+        req.path = tmp.path
+        req.accessor = injectTitle ?? "Pre-call Context"
+    }
+    let responses = try client.send(req)
+    if let err = responses.first(where: { $0.ok == false })?.error {
+        throw MCPToolError(err)
+    }
+    let r = responses.first
+    var parts = ["слушаю: \(r?.listening == true ? "да" : "нет")"]
+    if let url = r?.sessionURL { parts.append("сессия: \(url)") }
+    if injectText != nil { parts.append("контекст инжектирован") }
+    return parts.joined(separator: "\n")
+}
+
+private func handleListenStop(client: FroggyClient) throws -> String {
+    let responses = try client.send(FroggyRequest(cmd: "listenStop"))
+    if let err = responses.first(where: { $0.ok == false })?.error {
+        throw MCPToolError(err)
+    }
+    let r = responses.first
+    var parts = ["запись остановлена"]
+    if let url = r?.sessionURL {
+        parts.append("сессия: \(url)")
+        parts.append("резюме: froggy_recap")
+    }
+    return parts.joined(separator: "\n")
+}
+
+private func handleRecap(path: String?, client: FroggyClient) throws -> String {
+    var req = FroggyRequest(cmd: "recap")
+    req.path = path
+    let result = try client.call(req, timeout: 120)
+    return result.isEmpty ? "(пустое резюме)" : result
 }
 
 private func handleInject(text: String, title: String?, client: FroggyClient) throws -> String {
