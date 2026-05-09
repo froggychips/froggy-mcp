@@ -61,6 +61,24 @@ func toolDefinitions() -> [[String: Any]] {
             ]
         ],
         [
+            "name": "froggy_speak",
+            "description": "Froggy произносит текст вслух через системный TTS. Используй чтобы дать голосовой ответ пользователю. Блокирует до конца речи.",
+            "inputSchema": [
+                "type": "object",
+                "properties": [
+                    "text": [
+                        "type": "string",
+                        "description": "Текст для озвучки"
+                    ],
+                    "voice": [
+                        "type": "string",
+                        "description": "Голос macOS (say -v), например Milena (ru), Samantha (en). По умолчанию системный."
+                    ]
+                ] as [String: Any],
+                "required": ["text"]
+            ]
+        ],
+        [
             "name": "froggy_freeze",
             "description": "Замораживает приложение (SIGSTOP) чтобы освободить unified memory. Передай bundle_id (com.spotify.client) или имя из froggy_status. Используй перед тяжёлыми задачами — LLM, билд, деплой.",
             "inputSchema": [
@@ -168,6 +186,12 @@ func callTool(name: String, arguments: [String: Any], client: FroggyClient) -> [
             let useContext = arguments["use_context"] as? Bool ?? false
             text = try handleGenerate(prompt: prompt, maxTokens: maxTokens,
                                       useContext: useContext, client: client)
+        case "froggy_speak":
+            guard let speakText = arguments["text"] as? String else {
+                return errorContent("missing required argument: text")
+            }
+            let voice = arguments["voice"] as? String
+            text = try handleSpeak(text: speakText, voice: voice, client: client)
         case "froggy_freeze":
             guard let bundleId = arguments["bundle_id"] as? String else {
                 return errorContent("missing required argument: bundle_id")
@@ -249,6 +273,16 @@ private func handleTranscript(maxChars: Int, client: FroggyClient) throws -> Str
         ? String(content.prefix(maxChars)) + "\n\n… (обрезано, полный файл: \(sessionPath))"
         : content
     return trimmed
+}
+
+private func handleSpeak(text: String, voice: String?, client: FroggyClient) throws -> String {
+    var req = FroggyRequest(cmd: "speak", prompt: text)
+    req.path = voice
+    let responses = try client.send(req, timeoutSeconds: 120)
+    if let err = responses.first(where: { $0.ok == false })?.error {
+        throw MCPToolError(err)
+    }
+    return "произнесено"
 }
 
 private func handleFreeze(bundleId: String, client: FroggyClient) throws -> String {
