@@ -27,6 +27,10 @@ struct FroggyResponse: Codable {
     var memoryPressure: Int?
     var snapshots: Int?
     var kvCacheBits: Int?
+    var pressureLevel: String?
+    var tier1Frozen: [Int32]?
+    var tier2Frozen: [Int32]?
+    var secondsInLevel: Int?
     var `final`: Bool?
 }
 

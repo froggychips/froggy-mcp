@@ -61,6 +61,36 @@ func toolDefinitions() -> [[String: Any]] {
             ]
         ],
         [
+            "name": "froggy_freeze",
+            "description": "Замораживает приложение (SIGSTOP) чтобы освободить unified memory. Передай bundle_id (com.spotify.client) или имя из froggy_status. Используй перед тяжёлыми задачами — LLM, билд, деплой.",
+            "inputSchema": [
+                "type": "object",
+                "properties": [
+                    "bundle_id": [
+                        "type": "string",
+                        "description": "Bundle ID приложения, например com.spotify.client, com.tinyspeck.slackmacgap, com.hnc.Discord"
+                    ]
+                ] as [String: Any],
+                "required": ["bundle_id"]
+            ]
+        ],
+        [
+            "name": "froggy_thaw_all",
+            "description": "Размораживает все приложения (SIGCONT). Вызывай после завершения тяжёлой задачи.",
+            "inputSchema": [
+                "type": "object",
+                "properties": [:] as [String: Any]
+            ]
+        ],
+        [
+            "name": "froggy_pressure",
+            "description": "Текущее давление памяти и список замороженных процессов. Используй чтобы решить нужно ли замораживать приложения.",
+            "inputSchema": [
+                "type": "object",
+                "properties": [:] as [String: Any]
+            ]
+        ],
+        [
             "name": "froggy_listen",
             "description": "Запускает запись созвона (транскрипция микрофона). Опционально инжектирует pre-call контекст (Jira-тикеты, заметки) прямо при старте. Возвращает путь к файлу сессии.",
             "inputSchema": [
@@ -138,6 +168,15 @@ func callTool(name: String, arguments: [String: Any], client: FroggyClient) -> [
             let useContext = arguments["use_context"] as? Bool ?? false
             text = try handleGenerate(prompt: prompt, maxTokens: maxTokens,
                                       useContext: useContext, client: client)
+        case "froggy_freeze":
+            guard let bundleId = arguments["bundle_id"] as? String else {
+                return errorContent("missing required argument: bundle_id")
+            }
+            text = try handleFreeze(bundleId: bundleId, client: client)
+        case "froggy_thaw_all":
+            text = try handleThawAll(client: client)
+        case "froggy_pressure":
+            text = try handlePressure(client: client)
         case "froggy_listen":
             let injectText  = arguments["inject_text"]  as? String
             let injectTitle = arguments["inject_title"] as? String
@@ -210,6 +249,36 @@ private func handleTranscript(maxChars: Int, client: FroggyClient) throws -> Str
         ? String(content.prefix(maxChars)) + "\n\n… (обрезано, полный файл: \(sessionPath))"
         : content
     return trimmed
+}
+
+private func handleFreeze(bundleId: String, client: FroggyClient) throws -> String {
+    var req = FroggyRequest(cmd: "freeze")
+    req.path = bundleId
+    let responses = try client.send(req)
+    if let err = responses.first(where: { $0.ok == false })?.error {
+        throw MCPToolError(err)
+    }
+    return "заморожено: \(bundleId)"
+}
+
+private func handleThawAll(client: FroggyClient) throws -> String {
+    let responses = try client.send(FroggyRequest(cmd: "thawAll"))
+    if let err = responses.first(where: { $0.ok == false })?.error {
+        throw MCPToolError(err)
+    }
+    return "все приложения разморожены"
+}
+
+private func handlePressure(client: FroggyClient) throws -> String {
+    let responses = try client.send(FroggyRequest(cmd: "pressure"))
+    guard let r = responses.first else { return "нет ответа" }
+    if let err = r.error { throw MCPToolError(err) }
+    var lines: [String] = []
+    lines.append("давление памяти: \(r.pressureLevel ?? "unknown")")
+    if let t1 = r.tier1Frozen, !t1.isEmpty { lines.append("tier-1 заморожено (pids): \(t1.map(String.init).joined(separator: ", "))") }
+    if let t2 = r.tier2Frozen, !t2.isEmpty { lines.append("tier-2 заморожено (pids): \(t2.map(String.init).joined(separator: ", "))") }
+    if let secs = r.secondsInLevel { lines.append("в этом уровне: \(secs)с") }
+    return lines.joined(separator: "\n")
 }
 
 private func handleListen(injectText: String?, injectTitle: String?, client: FroggyClient) throws -> String {
