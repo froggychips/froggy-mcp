@@ -163,6 +163,27 @@ func toolDefinitions() -> [[String: Any]] {
                 ] as [String: Any],
                 "required": ["text"]
             ]
+        ],
+        [
+            "name": "froggy_chat",
+            "description": "Быстрый голосовой ответ через локальный LLM без roundtrip в Claude API. Pipeline: берёт хвост транскрипта → froggy_generate → froggy_speak (Milena Enhanced). Latency ~1-2с. Используй вместо froggy_generate+froggy_speak для голосового диалога в реальном времени.",
+            "inputSchema": [
+                "type": "object",
+                "properties": [
+                    "question": [
+                        "type": "string",
+                        "description": "Вопрос или реплика. Если не задан — отвечает на последнее из транскрипта."
+                    ],
+                    "max_transcript_chars": [
+                        "type": "integer",
+                        "description": "Сколько символов хвоста транскрипта брать как контекст (default 800)"
+                    ],
+                    "max_tokens": [
+                        "type": "integer",
+                        "description": "Максимум токенов ответа локального LLM (default 120)"
+                    ]
+                ] as [String: Any]
+            ]
         ]
     ]
 }
@@ -219,6 +240,12 @@ func callTool(name: String, arguments: [String: Any], client: FroggyClient) -> [
             }
             let title = arguments["title"] as? String
             text = try handleInject(text: injectText, title: title, client: client)
+        case "froggy_chat":
+            let question = arguments["question"] as? String
+            let maxTranscriptChars = arguments["max_transcript_chars"] as? Int ?? 800
+            let maxTokens = arguments["max_tokens"] as? Int ?? 120
+            text = try handleChat(question: question, maxTranscriptChars: maxTranscriptChars,
+                                  maxTokens: maxTokens, client: client)
         default:
             return errorContent("unknown tool: \(name)")
         }
@@ -355,6 +382,42 @@ private func handleRecap(path: String?, client: FroggyClient) throws -> String {
     req.path = path
     let result = try client.call(req, timeout: 120)
     return result.isEmpty ? "(пустое резюме)" : result
+}
+
+private func handleChat(question: String?, maxTranscriptChars: Int, maxTokens: Int,
+                        client: FroggyClient) throws -> String {
+    // 1. Tail of transcript (if session active)
+    var transcriptSlice = ""
+    if let sessionPath = (try? client.send(FroggyRequest(cmd: "listenStatus")))?.first?.sessionURL,
+       let content = try? String(contentsOfFile: sessionPath, encoding: .utf8) {
+        transcriptSlice = String(content.suffix(maxTranscriptChars))
+    }
+
+    // 2. Build a slim prompt
+    let prompt: String
+    if let q = question, !q.isEmpty {
+        prompt = transcriptSlice.isEmpty
+            ? "\(q)\n\nОтветь коротко, 1-2 предложения."
+            : "Контекст:\n\(transcriptSlice)\n\nВопрос: \(q)\n\nОтветь коротко, 1-2 предложения."
+    } else if !transcriptSlice.isEmpty {
+        prompt = "Последние реплики разговора:\n\(transcriptSlice)\n\nОтветь на последнее сообщение. Коротко, 1-2 предложения."
+    } else {
+        return "нет транскрипта и вопроса"
+    }
+
+    // 3. Generate via local LLM
+    let reply = try client.call(
+        FroggyRequest(cmd: "generate", prompt: prompt, maxTokens: maxTokens),
+        timeout: 60
+    )
+    guard !reply.isEmpty else { return "пустой ответ от LLM" }
+
+    // 4. Speak
+    var speakReq = FroggyRequest(cmd: "speak", prompt: reply)
+    speakReq.path = "Milena (Enhanced)"
+    _ = try? client.send(speakReq, timeoutSeconds: 120)
+
+    return reply
 }
 
 private func handleInject(text: String, title: String?, client: FroggyClient) throws -> String {
