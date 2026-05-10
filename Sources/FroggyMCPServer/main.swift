@@ -1,4 +1,5 @@
 import Foundation
+import FroggyKit
 
 // MARK: - MCP JSON-RPC сервер (stdio transport)
 //

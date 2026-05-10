@@ -8,7 +8,7 @@ let package = Package(
         .executable(name: "froggy-mcp", targets: ["FroggyMCPServer"])
     ],
     dependencies: [
-        .package(url: "https://github.com/froggychips/FroggyKit", from: "0.1.0")
+        .package(url: "https://github.com/froggychips/FroggyKit.git", from: "0.3.0")
     ],
     targets: [
         .executableTarget(

@@ -1,0 +1,14 @@
+{
+  "pins" : [
+    {
+      "identity" : "froggykit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/froggychips/FroggyKit.git",
+      "state" : {
+        "revision" : "ba5d0fa41b62dc24befec8e98ae972dc864c86ee",
+        "version" : "0.3.0"
+      }
+    }
+  ],
+  "version" : 2
+}

@@ -1,7 +1,7 @@
 import Foundation
 import FroggyKit
 
-struct MCPToolError: Error, LocalizedError {
+struct MCPToolError: Error, LocalizedError, CustomStringConvertible {
     let description: String
     init(_ msg: String) { description = msg }
     var errorDescription: String? { description }
