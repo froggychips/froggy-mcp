@@ -15,6 +15,11 @@ let package = Package(
             name: "FroggyMCPServer",
             dependencies: [.product(name: "FroggyKit", package: "FroggyKit")],
             path: "Sources/FroggyMCPServer"
+        ),
+        .testTarget(
+            name: "FroggyMCPTests",
+            dependencies: ["FroggyMCPServer"],
+            path: "Tests/FroggyMCPTests"
         )
     ]
 )
