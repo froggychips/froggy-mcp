@@ -1,4 +1,11 @@
 import Foundation
+import FroggyKit
+
+struct MCPToolError: Error, LocalizedError {
+    let description: String
+    init(_ msg: String) { description = msg }
+    var errorDescription: String? { description }
+}
 
 // MARK: - Tool definitions (tools/list)
 
@@ -203,7 +210,7 @@ func callTool(name: String, arguments: [String: Any], client: FroggyClient) -> [
             guard let prompt = arguments["prompt"] as? String else {
                 return errorContent("missing required argument: prompt")
             }
-            let maxTokens = arguments["max_tokens"] as? Int ?? 200
+            let maxTokens  = arguments["max_tokens"]  as? Int  ?? 200
             let useContext = arguments["use_context"] as? Bool ?? false
             text = try handleGenerate(prompt: prompt, maxTokens: maxTokens,
                                       useContext: useContext, client: client)
@@ -241,9 +248,9 @@ func callTool(name: String, arguments: [String: Any], client: FroggyClient) -> [
             let title = arguments["title"] as? String
             text = try handleInject(text: injectText, title: title, client: client)
         case "froggy_chat":
-            let question = arguments["question"] as? String
+            let question          = arguments["question"]             as? String
             let maxTranscriptChars = arguments["max_transcript_chars"] as? Int ?? 800
-            let maxTokens = arguments["max_tokens"] as? Int ?? 120
+            let maxTokens         = arguments["max_tokens"]           as? Int ?? 120
             text = try handleChat(question: question, maxTranscriptChars: maxTranscriptChars,
                                   maxTokens: maxTokens, client: client)
         default:
@@ -298,7 +305,6 @@ private func handleGenerate(prompt: String, maxTokens: Int, useContext: Bool,
 }
 
 private func handleTranscript(maxChars: Int, client: FroggyClient) throws -> String {
-    // Получаем путь к файлу сессии через listenStatus
     let responses = try client.send(FroggyRequest(cmd: "listenStatus"))
     guard let r = responses.first, let sessionPath = r.sessionURL else {
         return "нет активной или завершённой сессии — запусти `froggy listen` для начала созвона"
@@ -361,12 +367,11 @@ private func handlePressure(client: FroggyClient) throws -> String {
 
 private func handleListen(injectText: String?, injectTitle: String?, client: FroggyClient) throws -> String {
     var req = FroggyRequest(cmd: "listen")
-    // pre-call inject: write to temp file, daemon reads it via request.path
     if let text = injectText, !text.isEmpty {
         let tmp = FileManager.default.temporaryDirectory
             .appendingPathComponent("froggy-inject-\(Int(Date().timeIntervalSince1970)).md")
         try text.write(to: tmp, atomically: true, encoding: .utf8)
-        req.path = tmp.path
+        req.path     = tmp.path
         req.accessor = injectTitle ?? "Pre-call Context"
     }
     let responses = try client.send(req)
@@ -403,14 +408,12 @@ private func handleRecap(path: String?, client: FroggyClient) throws -> String {
 
 private func handleChat(question: String?, maxTranscriptChars: Int, maxTokens: Int,
                         client: FroggyClient) throws -> String {
-    // 1. Tail of transcript (if session active)
     var transcriptSlice = ""
     if let sessionPath = (try? client.send(FroggyRequest(cmd: "listenStatus")))?.first?.sessionURL,
        let content = try? String(contentsOfFile: sessionPath, encoding: .utf8) {
         transcriptSlice = String(content.suffix(maxTranscriptChars))
     }
 
-    // 2. Build a slim prompt
     let persona = """
         Ты — Froggy, голосовой ассистент. Говоришь живо и по-человечески, без канцелярита. \
         Отвечаешь на том же языке что и вопрос. Максимум 2 предложения — чётко и тепло.
@@ -426,14 +429,12 @@ private func handleChat(question: String?, maxTranscriptChars: Int, maxTokens: I
         return "нет транскрипта и вопроса"
     }
 
-    // 3. Generate via local LLM
     let reply = try client.call(
         FroggyRequest(cmd: "generate", prompt: prompt, maxTokens: maxTokens),
         timeout: 60
     )
     guard !reply.isEmpty else { return "пустой ответ от LLM" }
 
-    // 4. Speak
     var speakReq = FroggyRequest(cmd: "speak", prompt: reply)
     speakReq.path = "Milena (Enhanced)"
     _ = try? client.send(speakReq, timeoutSeconds: 120)
@@ -454,8 +455,6 @@ private func handleInject(text: String, title: String?, client: FroggyClient) th
 }
 
 private func sanitizeInjectedText(_ text: String) -> String {
-    // Strip prompt injection patterns before writing to context store.
-    // Not a complete defence — raises the bar against naive injections.
     let patterns: [String] = [
         #"\[SYSTEM[^\]]*\]"#,
         #"(?i)\bignore (previous|all|your) instructions?\b"#,
