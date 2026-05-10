@@ -277,6 +277,9 @@ private func handleStatus(client: FroggyClient) throws -> String {
     if let out = r.audioOutputDevice { lines.append("аудио выход: \(out)") }
     if let inp = r.audioInputDevice  { lines.append("аудио вход: \(inp)") }
     if let bits = r.kvCacheBits      { lines.append("KV-cache: \(bits) bit") }
+    if r.modelLoaded == false {
+        lines.append("⚠ модель не загружена — запусти модель в Froggy перед использованием generate/chat/recap")
+    }
     return lines.joined(separator: "\n")
 }
 
@@ -297,11 +300,17 @@ private func handleContext(maxChars: Int, client: FroggyClient) throws -> String
 
 private func handleGenerate(prompt: String, maxTokens: Int, useContext: Bool,
                              client: FroggyClient) throws -> String {
-    let result = try client.call(
-        FroggyRequest(cmd: "generate", prompt: prompt, maxTokens: maxTokens, useContext: useContext),
-        timeout: 120
-    )
-    return result.isEmpty ? "(пустой ответ)" : result
+    do {
+        let result = try client.call(
+            FroggyRequest(cmd: "generate", prompt: prompt, maxTokens: maxTokens, useContext: useContext),
+            timeout: 120
+        )
+        return result.isEmpty ? "(пустой ответ)" : result
+    } catch FroggyClientError.daemonNotRunning {
+        throw FroggyClientError.daemonNotRunning
+    } catch {
+        throw MCPToolError("модель не отвечает — убедись что модель загружена в Froggy: \(error.localizedDescription)")
+    }
 }
 
 private func handleTranscript(maxChars: Int, client: FroggyClient) throws -> String {
@@ -454,7 +463,8 @@ private func handleInject(text: String, title: String?, client: FroggyClient) th
     return "контекст добавлен в сессию\(title.map { ": \($0)" } ?? "")\(note)"
 }
 
-private func sanitizeInjectedText(_ text: String) -> String {
+// internal (not private) so the test target can access it via @testable import
+func sanitizeInjectedText(_ text: String) -> String {
     let patterns: [String] = [
         #"\[SYSTEM[^\]]*\]"#,
         #"(?i)\bignore (previous|all|your) instructions?\b"#,
@@ -474,6 +484,6 @@ private func sanitizeInjectedText(_ text: String) -> String {
     return result
 }
 
-private func errorContent(_ message: String) -> [[String: Any]] {
+func errorContent(_ message: String) -> [[String: Any]] {
     [["type": "text", "text": "Ошибка: \(message)"]]
 }
