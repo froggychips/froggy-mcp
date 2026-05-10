@@ -22,6 +22,7 @@ any copy-paste.
 | Repo | Role |
 |---|---|
 | [Froggy](https://github.com/froggychips/Froggy) | Local LLM daemon, OCR, screen context, memory management |
+| [FroggyKit](https://github.com/froggychips/FroggyKit) | Shared Swift package — FroggyClient IPC |
 | **froggy-mcp** | MCP bridge → Claude Code |
 | [froggy-sre](https://github.com/froggychips/froggy-sre) | SRE incident response agent — K8s alert analysis pipeline |
 
@@ -38,6 +39,15 @@ Claude Code  ←—stdio / JSON-RPC—→  froggy-sre  ←—socket (primary) / 
 | `froggy_context` | Latest OCR snapshot of your screen — what's open right now |
 | `froggy_generate` | Generate via local LLM (private, no cloud) |
 | `froggy_transcript` | Transcript of the current or last call (markdown, with timestamps) |
+| `froggy_speak` | Speak text aloud via macOS system TTS |
+| `froggy_freeze` | Freeze an app (SIGSTOP) to free unified memory before heavy tasks |
+| `froggy_thaw_all` | Unfreeze all apps (SIGCONT) after a heavy task completes |
+| `froggy_pressure` | Current memory pressure level and list of frozen processes |
+| `froggy_listen` | Start call recording (microphone transcription); optionally inject pre-call context |
+| `froggy_listen_stop` | Stop call recording; returns session path for recap |
+| `froggy_recap` | Generate an LLM summary of the last call via the local model |
+| `froggy_inject` | Inject text (Jira tickets, notes) into the current call's session file |
+| `froggy_chat` | Fast voice reply via local LLM — no roundtrip to Claude API; ~1–2 s latency |
 
 ## Requirements
 
@@ -57,7 +67,7 @@ cp .build/release/froggy-mcp /usr/local/bin/froggy-mcp
 claude mcp add froggy /usr/local/bin/froggy-mcp --scope global
 ```
 
-After restarting Claude Code the four `froggy_*` tools will be available in every session.
+After restarting Claude Code the `froggy_*` tools will be available in every session.
 
 ## Configuration
 
@@ -66,9 +76,10 @@ Override: `FROGGY_IPC_SOCKET=/path/to/froggy.sock`.
 
 ## How it works
 
-`froggy-mcp` is a minimal Swift binary — no external dependencies. It speaks
+`froggy-mcp` is a minimal Swift binary. It speaks
 [MCP](https://spec.modelcontextprotocol.io/) (JSON-RPC 2.0 over stdio) toward Claude Code and
-speaks Froggy's Unix-socket IPC toward the daemon. The bridge is ~350 lines of Swift.
+speaks Froggy's Unix-socket IPC toward the daemon via [FroggyKit](https://github.com/froggychips/FroggyKit).
+The bridge is ~350 lines of Swift.
 
 ```
 Claude Code  ←—stdio / JSON-RPC—→  froggy-mcp  ←—unix socket / JSON-line—→  Froggy daemon
