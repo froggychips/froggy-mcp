@@ -17,6 +17,19 @@ any copy-paste.
 
 ---
 
+## Ecosystem
+
+| Repo | Role |
+|---|---|
+| [Froggy](https://github.com/froggychips/Froggy) | Local LLM daemon, OCR, screen context, memory management |
+| **froggy-mcp** | MCP bridge → Claude Code |
+| [froggy-sre](https://github.com/froggychips/froggy-sre) | SRE incident response agent — K8s alert analysis pipeline |
+
+```
+Claude Code  ←—stdio / JSON-RPC—→  froggy-mcp  ←—unix socket / JSON-line—→  Froggy daemon
+Claude Code  ←—stdio / JSON-RPC—→  froggy-sre  ←—socket (primary) / HTTPS (fallback)—→  Froggy / Anthropic
+```
+
 ## Tools
 
 | Tool | What it does |
@@ -60,3 +73,6 @@ speaks Froggy's Unix-socket IPC toward the daemon. The bridge is ~350 lines of S
 ```
 Claude Code  ←—stdio / JSON-RPC—→  froggy-mcp  ←—unix socket / JSON-line—→  Froggy daemon
 ```
+
+---
+*Part of the [Froggy](https://github.com/froggychips/Froggy) ecosystem.*
