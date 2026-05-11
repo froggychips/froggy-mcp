@@ -1,14 +1,15 @@
 {
+  "originHash" : "f28cc0f7794b9b869ca533188a8184428f0fa1b9a81423422204fb27513320c8",
   "pins" : [
     {
       "identity" : "froggykit",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/froggychips/FroggyKit.git",
       "state" : {
-        "revision" : "ba5d0fa41b62dc24befec8e98ae972dc864c86ee",
-        "version" : "0.3.0"
+        "revision" : "f77fdbb93776bd38124ccb2d6d5e8f4f876363a1",
+        "version" : "0.3.1"
       }
     }
   ],
-  "version" : 2
+  "version" : 3
 }
