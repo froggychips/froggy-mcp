@@ -1,4 +1,4 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.0
 import PackageDescription
 
 let package = Package(
@@ -8,13 +8,17 @@ let package = Package(
         .executable(name: "froggy-mcp", targets: ["FroggyMCPServer"])
     ],
     dependencies: [
-        .package(url: "https://github.com/froggychips/FroggyKit.git", from: "0.3.0")
+        .package(url: "https://github.com/froggychips/FroggyKit.git", from: "0.3.1")
     ],
     targets: [
         .executableTarget(
             name: "FroggyMCPServer",
             dependencies: [.product(name: "FroggyKit", package: "FroggyKit")],
-            path: "Sources/FroggyMCPServer"
+            path: "Sources/FroggyMCPServer",
+            swiftSettings: [
+                .enableExperimentalFeature("StrictConcurrency"),
+                .enableUpcomingFeature("ExistentialAny"),
+            ]
         ),
         .testTarget(
             name: "FroggyMCPTests",
